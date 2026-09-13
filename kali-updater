@@ -1,0 +1,1237 @@
+#!/usr/bin/env bash
+
+# ============================================================
+#  Kali Updater
+#  Interactive bilingual system updater for Kali Linux
+#
+#  Languages:
+#    - English
+#    - Portugues
+#
+#  Dependencies:
+#    - gum (installed automatically if missing)
+#    - curl
+#    - gpg
+#
+#  License: MIT
+#  Author: faaaaall
+#  Github: github.com/Faaaall
+# ============================================================
+
+set -Eeuo pipefail
+
+# ─────────────────────────────────────────────────────────────
+# Configuration
+# ─────────────────────────────────────────────────────────────
+
+APP_NAME="Kali Updater"
+VERSION="1.1.0"
+
+LOG_DIR="/var/log/kali-updater"
+LOG_FILE="$LOG_DIR/kali-updater.log"
+
+CHARM_KEYRING="/etc/apt/keyrings/charm.gpg"
+CHARM_REPO="/etc/apt/sources.list.d/charm.list"
+
+# Gum colors
+PURPLE=141
+CYAN=45
+GREEN=82
+YELLOW=220
+RED=196
+GRAY=244
+WHITE=255
+
+LANGUAGE="en"
+
+# ─────────────────────────────────────────────────────────────
+# Basic helpers
+# ─────────────────────────────────────────────────────────────
+
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+is_root() {
+    [[ "${EUID}" -eq 0 ]]
+}
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+# ─────────────────────────────────────────────────────────────
+# Language system
+# ─────────────────────────────────────────────────────────────
+
+t() {
+    local key="$1"
+
+    if [[ "$LANGUAGE" == "pt" ]]; then
+        case "$key" in
+
+            app_subtitle) echo "Gerenciador interativo de atualizacoes do Kali Linux" ;;
+
+            root_required) echo "Este programa precisa de privilegios root." ;;
+            run_with) echo "Execute com:" ;;
+
+            installing_dependencies) echo "Instalando dependencias necessarias..." ;;
+            gum_required) echo "O Gum e necessario para a interface interativa." ;;
+            gum_installing) echo "Instalando o Gum automaticamente..." ;;
+            gum_success) echo "Gum instalado com sucesso." ;;
+            gum_failed) echo "Falha ao instalar o Gum." ;;
+
+            choose_language) echo "Escolha o idioma da interface" ;;
+            portuguese) echo "Portugues" ;;
+            english) echo "English" ;;
+
+            choose_action) echo "Escolha uma acao" ;;
+
+            complete_update) echo "Atualizacao Completa" ;;
+            update_repositories) echo "Atualizar Repositorios" ;;
+            full_upgrade) echo "Atualizacao Completa do Sistema" ;;
+            clean_system) echo "Limpar Sistema" ;;
+            repair_packages) echo "Reparar Pacotes" ;;
+            system_information) echo "Informacoes do Sistema" ;;
+            preflight_check) echo "Verificacao Inicial" ;;
+            view_log) echo "Ver Log" ;;
+            about) echo "Sobre" ;;
+            exit) echo "Sair" ;;
+
+            system_info_title) echo "INFORMACOES DO SISTEMA" ;;
+            property) echo "PROPRIEDADE" ;;
+            value) echo "VALOR" ;;
+            hostname) echo "Hostname" ;;
+            kernel) echo "Kernel" ;;
+            architecture) echo "Arquitetura" ;;
+            uptime) echo "Tempo ligado" ;;
+            memory) echo "Memoria" ;;
+            disk) echo "Disco" ;;
+            local_ip) echo "IP Local" ;;
+
+            preflight_title) echo "VERIFICACAO INICIAL" ;;
+            internet_available) echo "Conexao com a internet disponivel" ;;
+            no_internet) echo "Nenhuma conexao com a internet detectada." ;;
+            low_disk) echo "Pouco espaco em disco" ;;
+            disk_available) echo "Espaco em disco disponivel" ;;
+            package_db_healthy) echo "Banco de pacotes saudavel" ;;
+            package_db_problem) echo "O banco de pacotes pode conter problemas" ;;
+            apt_available) echo "APT disponivel" ;;
+            apt_busy) echo "Outro processo APT pode estar em execucao" ;;
+
+            repositories_title) echo "BANCO DE PACOTES" ;;
+            refreshing_repositories) echo "Atualizando repositorios do Kali..." ;;
+            already_updated) echo "Seu sistema ja esta atualizado." ;;
+            packages_available) echo "pacote(s) disponivel(is) para atualizacao." ;;
+            showing_first_20) echo "Mostrando apenas os primeiros 20 pacotes." ;;
+
+            upgrade_title) echo "ATUALIZACAO COMPLETA DO SISTEMA" ;;
+            refreshing) echo "Atualizando repositorios..." ;;
+            no_upgrades) echo "Nenhuma atualizacao disponivel." ;;
+            packages_ready) echo "pacote(s) pronto(s) para atualizacao." ;;
+            run_full_upgrade) echo "Executar full-upgrade do Kali?" ;;
+            upgrade) echo "Atualizar" ;;
+            cancel) echo "Cancelar" ;;
+            upgrading_system) echo "Atualizando o Kali Linux..." ;;
+            upgrade_completed) echo "Atualizacao do sistema concluida." ;;
+            upgrade_cancelled) echo "Atualizacao cancelada." ;;
+
+            cleanup_title) echo "LIMPEZA DO SISTEMA" ;;
+            cleanup_description) echo "Isto removera pacotes nao utilizados e limpara o cache do APT." ;;
+            continue) echo "Continuar?" ;;
+            clean) echo "Limpar" ;;
+            cleanup_cancelled) echo "Limpeza cancelada." ;;
+            removing_unused) echo "Removendo dependencias nao utilizadas..." ;;
+            cleaning_cache) echo "Limpando cache do APT..." ;;
+            cleanup_completed) echo "Limpeza concluida." ;;
+
+            repair_title) echo "REPARO DE PACOTES" ;;
+            repair_warning) echo "Use esta opcao caso o APT ou dpkg reporte pacotes quebrados." ;;
+            repair_question) echo "Tentar reparar os pacotes?" ;;
+            repair) echo "Reparar" ;;
+            configuring_packages) echo "Configurando pacotes incompletos..." ;;
+            repairing_dependencies) echo "Reparando dependencias..." ;;
+            package_repair_completed) echo "Reparo de pacotes concluido." ;;
+
+            complete_maintenance) echo "MANUTENCAO COMPLETA DO SISTEMA" ;;
+            this_will) echo "Esta operacao ira:" ;;
+            step_update_repo) echo "- Atualizar repositorios" ;;
+            step_full_upgrade) echo "- Executar full-upgrade do Kali" ;;
+            step_remove_unused) echo "- Remover pacotes nao utilizados" ;;
+            step_clean_cache) echo "- Limpar o cache do APT" ;;
+            start) echo "Iniciar" ;;
+
+            step1) echo "1 / 4 - REPOSITORIOS" ;;
+            step2) echo "2 / 4 - ATUALIZACAO" ;;
+            step3) echo "3 / 4 - LIMPEZA" ;;
+            step4) echo "4 / 4 - CACHE" ;;
+
+            updating_repositories) echo "Atualizando repositorios..." ;;
+            upgrading) echo "Atualizando sistema..." ;;
+            removing_packages) echo "Removendo pacotes nao utilizados..." ;;
+            cleaning_apt) echo "Limpando cache do APT..." ;;
+
+            final_status) echo "STATUS FINAL" ;;
+            fully_updated) echo "Kali Linux esta totalmente atualizado." ;;
+            packages_remaining) echo "pacote(s) ainda podem ser atualizados." ;;
+            dpkg_issue) echo "O dpkg detectou possiveis problemas nos pacotes." ;;
+            no_reboot) echo "Nenhuma reinicializacao e necessaria." ;;
+            reboot_recommended) echo "E recomendavel reiniciar o sistema." ;;
+            reboot_now) echo "Reiniciar o sistema agora?" ;;
+            reboot) echo "Reiniciar" ;;
+            later) echo "Depois" ;;
+
+            log_title) echo "LOG DO KALI UPDATER" ;;
+            log_empty) echo "O log esta vazio." ;;
+
+            about_description) echo "Gerenciador interativo de pacotes do Kali Linux" ;;
+            powered_by) echo "Feito com Bash + APT + Charm Gum" ;;
+
+            press_enter) echo "Pressione Enter para continuar..." ;;
+            goodbye) echo "Ate a proxima atualizacao." ;;
+
+            error_title) echo "[ERROR] Algo deu errado" ;;
+            line) echo "Linha" ;;
+            exit_code) echo "Codigo de saida" ;;
+            log_location) echo "Log" ;;
+            task_failed) echo "falhou." ;;
+            check_log) echo "Verifique o log:" ;;
+
+            *)
+                echo "$key"
+                ;;
+        esac
+
+    else
+
+        case "$key" in
+
+            app_subtitle) echo "Interactive Kali Linux system updater" ;;
+
+            root_required) echo "This program requires root privileges." ;;
+            run_with) echo "Run it with:" ;;
+
+            installing_dependencies) echo "Installing required dependencies..." ;;
+            gum_required) echo "Gum is required for the interactive interface." ;;
+            gum_installing) echo "Installing Gum automatically..." ;;
+            gum_success) echo "Gum installed successfully." ;;
+            gum_failed) echo "Failed to install Gum." ;;
+
+            choose_language) echo "Choose the interface language" ;;
+            portuguese) echo "Portugues" ;;
+            english) echo "English" ;;
+
+            choose_action) echo "Choose an action" ;;
+
+            complete_update) echo "Complete Update" ;;
+            update_repositories) echo "Update Repositories" ;;
+            full_upgrade) echo "Full Upgrade" ;;
+            clean_system) echo "Clean System" ;;
+            repair_packages) echo "Repair Packages" ;;
+            system_information) echo "System Information" ;;
+            preflight_check) echo "Pre-flight Check" ;;
+            view_log) echo "View Log" ;;
+            about) echo "About" ;;
+            exit) echo "Exit" ;;
+
+            system_info_title) echo "SYSTEM INFORMATION" ;;
+            property) echo "PROPERTY" ;;
+            value) echo "VALUE" ;;
+            hostname) echo "Hostname" ;;
+            kernel) echo "Kernel" ;;
+            architecture) echo "Architecture" ;;
+            uptime) echo "Uptime" ;;
+            memory) echo "Memory" ;;
+            disk) echo "Disk" ;;
+            local_ip) echo "Local IP" ;;
+
+            preflight_title) echo "PRE-FLIGHT CHECK" ;;
+            internet_available) echo "Internet connection available" ;;
+            no_internet) echo "No internet connection detected." ;;
+            low_disk) echo "Low disk space" ;;
+            disk_available) echo "Disk space available" ;;
+            package_db_healthy) echo "Package database looks healthy" ;;
+            package_db_problem) echo "Package database reports possible problems" ;;
+            apt_available) echo "APT is available" ;;
+            apt_busy) echo "Another APT process may currently be running" ;;
+
+            repositories_title) echo "PACKAGE DATABASE" ;;
+            refreshing_repositories) echo "Refreshing Kali repositories..." ;;
+            already_updated) echo "Your system is already up to date." ;;
+            packages_available) echo "package(s) can be upgraded." ;;
+            showing_first_20) echo "Showing the first 20 packages only." ;;
+
+            upgrade_title) echo "FULL SYSTEM UPGRADE" ;;
+            refreshing) echo "Refreshing repositories..." ;;
+            no_upgrades) echo "No upgrades available." ;;
+            packages_ready) echo "package(s) are ready to upgrade." ;;
+            run_full_upgrade) echo "Run Kali full-upgrade?" ;;
+            upgrade) echo "Upgrade" ;;
+            cancel) echo "Cancel" ;;
+            upgrading_system) echo "Upgrading Kali Linux..." ;;
+            upgrade_completed) echo "System upgrade completed." ;;
+            upgrade_cancelled) echo "Upgrade cancelled." ;;
+
+            cleanup_title) echo "SYSTEM CLEANUP" ;;
+            cleanup_description) echo "This will remove unused packages and clean the APT cache." ;;
+            continue) echo "Continue?" ;;
+            clean) echo "Clean" ;;
+            cleanup_cancelled) echo "Cleanup cancelled." ;;
+            removing_unused) echo "Removing unused dependencies..." ;;
+            cleaning_cache) echo "Cleaning APT cache..." ;;
+            cleanup_completed) echo "Cleanup completed." ;;
+
+            repair_title) echo "PACKAGE REPAIR" ;;
+            repair_warning) echo "Use this if APT or dpkg reports broken packages." ;;
+            repair_question) echo "Attempt package repair?" ;;
+            repair) echo "Repair" ;;
+            configuring_packages) echo "Configuring unfinished packages..." ;;
+            repairing_dependencies) echo "Repairing dependencies..." ;;
+            package_repair_completed) echo "Package repair completed." ;;
+
+            complete_maintenance) echo "COMPLETE SYSTEM MAINTENANCE" ;;
+            this_will) echo "This will:" ;;
+            step_update_repo) echo "- Update repositories" ;;
+            step_full_upgrade) echo "- Full-upgrade Kali" ;;
+            step_remove_unused) echo "- Remove unused packages" ;;
+            step_clean_cache) echo "- Clean APT cache" ;;
+            start) echo "Start" ;;
+
+            step1) echo "1 / 4 - REPOSITORIES" ;;
+            step2) echo "2 / 4 - UPGRADE" ;;
+            step3) echo "3 / 4 - CLEANUP" ;;
+            step4) echo "4 / 4 - CACHE" ;;
+
+            updating_repositories) echo "Updating repositories..." ;;
+            upgrading) echo "Upgrading system..." ;;
+            removing_packages) echo "Removing unused packages..." ;;
+            cleaning_apt) echo "Cleaning APT cache..." ;;
+
+            final_status) echo "FINAL STATUS" ;;
+            fully_updated) echo "Kali Linux is fully updated." ;;
+            packages_remaining) echo "package(s) are still upgradeable." ;;
+            dpkg_issue) echo "dpkg detected possible package issues." ;;
+            no_reboot) echo "No reboot currently required." ;;
+            reboot_recommended) echo "A reboot is recommended." ;;
+            reboot_now) echo "Restart the system now?" ;;
+            reboot) echo "Reboot" ;;
+            later) echo "Later" ;;
+
+            log_title) echo "KALI UPDATER LOG" ;;
+            log_empty) echo "Log is empty." ;;
+
+            about_description) echo "Interactive Kali Linux package manager" ;;
+            powered_by) echo "Built with Bash + APT + Charm Gum" ;;
+
+            press_enter) echo "Press Enter to continue..." ;;
+            goodbye) echo "See you next update." ;;
+
+            error_title) echo "[ERROR] Something went wrong" ;;
+            line) echo "Line" ;;
+            exit_code) echo "Exit code" ;;
+            log_location) echo "Log" ;;
+            task_failed) echo "failed." ;;
+            check_log) echo "Check the log:" ;;
+
+            *)
+                echo "$key"
+                ;;
+        esac
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# Pause
+# ─────────────────────────────────────────────────────────────
+
+pause() {
+    echo
+
+    gum input \
+        --placeholder "$(t press_enter)" \
+        >/dev/null || true
+}
+
+# ─────────────────────────────────────────────────────────────
+# Error handling
+# ─────────────────────────────────────────────────────────────
+
+handle_error() {
+    local exit_code=$?
+    local line_number=$1
+
+    echo
+
+    if command_exists gum; then
+        gum style \
+            --border rounded \
+            --border-foreground "$RED" \
+            --foreground "$RED" \
+            --padding "1 2" \
+            "$(t error_title)" \
+            "$(t line): $line_number" \
+            "$(t exit_code): $exit_code" \
+            "$(t log_location): $LOG_FILE"
+    else
+        echo "$(t error_title)"
+        echo "$(t line): $line_number"
+        echo "$(t exit_code): $exit_code"
+        echo "$(t log_location): $LOG_FILE"
+    fi
+
+    log "ERROR line=$line_number exit_code=$exit_code"
+
+    exit "$exit_code"
+}
+
+trap 'handle_error $LINENO' ERR
+
+# ─────────────────────────────────────────────────────────────
+# Root check
+# ─────────────────────────────────────────────────────────────
+
+require_root() {
+    if ! is_root; then
+        echo
+        echo "$(t root_required)"
+        echo
+        echo "$(t run_with)"
+        echo
+        echo "    sudo $0"
+        echo
+        exit 1
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# Logging
+# ─────────────────────────────────────────────────────────────
+
+prepare_logs() {
+    mkdir -p "$LOG_DIR"
+    touch "$LOG_FILE"
+
+    chmod 755 "$LOG_DIR"
+    chmod 640 "$LOG_FILE"
+
+    log "========================================"
+    log "$APP_NAME $VERSION started"
+}
+
+# ─────────────────────────────────────────────────────────────
+# Base dependencies
+# ─────────────────────────────────────────────────────────────
+
+install_base_dependencies() {
+
+    local missing_packages=()
+
+    if ! command_exists curl; then
+        missing_packages+=("curl")
+    fi
+
+    if ! command_exists gpg; then
+        missing_packages+=("gnupg")
+    fi
+
+    if ((${#missing_packages[@]} > 0)); then
+
+        echo
+        echo "$(t installing_dependencies)"
+
+        apt-get update -qq
+
+        DEBIAN_FRONTEND=noninteractive \
+            apt-get install -y "${missing_packages[@]}"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# Gum installation
+# ─────────────────────────────────────────────────────────────
+
+install_gum() {
+
+    if command_exists gum; then
+        return
+    fi
+
+    clear
+
+    echo
+    echo "======================================================"
+    echo "                  KALI UPDATER SETUP"
+    echo "======================================================"
+    echo
+    echo "$(t gum_required)"
+    echo "$(t gum_installing)"
+    echo
+
+    log "Gum not found. Installing."
+
+    install_base_dependencies
+
+    mkdir -p /etc/apt/keyrings
+
+    curl -fsSL https://repo.charm.sh/apt/gpg.key \
+        | gpg --dearmor --yes -o "$CHARM_KEYRING"
+
+    chmod 644 "$CHARM_KEYRING"
+
+    echo \
+        "deb [signed-by=$CHARM_KEYRING] https://repo.charm.sh/apt/ * *" \
+        > "$CHARM_REPO"
+
+    apt-get update -qq
+
+    DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y gum
+
+    if ! command_exists gum; then
+        echo
+        echo "$(t gum_failed)"
+        exit 1
+    fi
+
+    echo
+    echo "$(t gum_success)"
+
+    sleep 1
+}
+
+# ─────────────────────────────────────────────────────────────
+# Language selection
+# ─────────────────────────────────────────────────────────────
+
+choose_language() {
+
+    clear
+
+    gum style \
+        --border double \
+        --border-foreground "$PURPLE" \
+        --foreground "$PURPLE" \
+        --align center \
+        --width 58 \
+        --padding "1 3" \
+        "KALI SYSTEM UPDATER" \
+        "Language / Idioma"
+
+    echo
+
+    local choice
+
+    choice="$(
+        gum choose \
+            --cursor.foreground "$PURPLE" \
+            --selected.foreground "$CYAN" \
+            "English" \
+            "Portugues"
+    )" || exit 0
+
+    case "$choice" in
+        "English")
+            LANGUAGE="en"
+            ;;
+        "Portugues")
+            LANGUAGE="pt"
+            ;;
+    esac
+
+    log "Language selected: $LANGUAGE"
+}
+
+# ─────────────────────────────────────────────────────────────
+# UI helpers
+# ─────────────────────────────────────────────────────────────
+
+header() {
+
+    clear
+
+    gum style \
+        --border double \
+        --border-foreground "$PURPLE" \
+        --foreground "$PURPLE" \
+        --align center \
+        --width 62 \
+        --padding "1 3" \
+        "KALI SYSTEM UPDATER" \
+        "v$VERSION"
+
+    echo
+
+    gum style \
+        --align center \
+        --width 62 \
+        --foreground "$GRAY" \
+        "$(t app_subtitle)"
+
+    echo
+}
+
+section() {
+    echo
+
+    gum style \
+        --bold \
+        --foreground "$CYAN" \
+        ":: $1"
+
+    echo
+}
+
+success() {
+    gum style --foreground "$GREEN" "[OK] $1"
+}
+
+warning() {
+    gum style --foreground "$YELLOW" "[WARN] $1"
+}
+
+error_message() {
+    gum style --foreground "$RED" "[ERROR] $1"
+}
+
+info() {
+    gum style --foreground "$CYAN" "> $1"
+}
+
+# ─────────────────────────────────────────────────────────────
+# Task runner
+# ─────────────────────────────────────────────────────────────
+
+run_task() {
+
+    local title="$1"
+    shift
+
+    log "Running: $*"
+
+    if gum spin \
+        --spinner dot \
+        --spinner.foreground "$PURPLE" \
+        --title "$title" \
+        --title.foreground "$WHITE" \
+        --show-output=false \
+        -- "$@" >>"$LOG_FILE" 2>&1
+    then
+        success "$title"
+        log "SUCCESS: $title"
+    else
+        error_message "$title $(t task_failed)"
+        log "FAILED: $title"
+
+        echo
+
+        gum style \
+            --foreground "$GRAY" \
+            "$(t check_log)" \
+            "$LOG_FILE"
+
+        return 1
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# Internet check
+# ─────────────────────────────────────────────────────────────
+
+check_internet() {
+
+    if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if curl -Is --max-time 5 https://http.kali.org \
+        >/dev/null 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+# ─────────────────────────────────────────────────────────────
+# System information
+# ─────────────────────────────────────────────────────────────
+
+system_information() {
+
+    header
+    section "$(t system_info_title)"
+
+    local hostname_value
+    local kernel_value
+    local architecture
+    local uptime_value
+    local disk_value
+    local memory_value
+    local ip_value
+
+    hostname_value="$(hostname)"
+    kernel_value="$(uname -r)"
+    architecture="$(uname -m)"
+    uptime_value="$(uptime -p 2>/dev/null || echo "Unknown")"
+
+    disk_value="$(
+        df -h / \
+            | awk 'NR==2 {print $4 " free / " $2}'
+    )"
+
+    memory_value="$(
+        free -h \
+            | awk '/Mem:/ {print $3 " used / " $2}'
+    )"
+
+    ip_value="$(
+        hostname -I 2>/dev/null \
+            | awk '{print $1}'
+    )"
+
+    [[ -z "$ip_value" ]] && ip_value="N/A"
+
+    gum table \
+        --border rounded \
+        --border.foreground "$PURPLE" \
+        --header.foreground "$CYAN" \
+        --cell.foreground "$WHITE" \
+        --columns "$(t property),$(t value)" \
+        --widths 18,37 \
+        --separator "," <<EOF
+$(t hostname),$hostname_value
+$(t kernel),$kernel_value
+$(t architecture),$architecture
+$(t uptime),$uptime_value
+$(t memory),$memory_value
+$(t disk),$disk_value
+$(t local_ip),$ip_value
+EOF
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Pre-flight
+# ─────────────────────────────────────────────────────────────
+
+preflight_check() {
+
+    header
+    section "$(t preflight_title)"
+
+    if check_internet; then
+        success "$(t internet_available)"
+    else
+        error_message "$(t no_internet)"
+        pause
+        return 1
+    fi
+
+    local available_kb
+    local available_gb
+
+    available_kb="$(
+        df / --output=avail \
+            | tail -1 \
+            | tr -d ' '
+    )"
+
+    available_gb=$((available_kb / 1024 / 1024))
+
+    if ((available_gb < 2)); then
+        warning "$(t low_disk): ${available_gb} GB"
+    else
+        success "$(t disk_available): ${available_gb} GB"
+    fi
+
+    if dpkg --audit | grep -q .; then
+        warning "$(t package_db_problem)"
+    else
+        success "$(t package_db_healthy)"
+    fi
+
+    if [[ -f /var/lib/dpkg/lock-frontend ]] &&
+       fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+
+        warning "$(t apt_busy)"
+
+    else
+
+        success "$(t apt_available)"
+
+    fi
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Update repositories
+# ─────────────────────────────────────────────────────────────
+
+update_repositories() {
+
+    header
+    section "$(t repositories_title)"
+
+    run_task \
+        "$(t refreshing_repositories)" \
+        apt-get update
+
+    echo
+
+    local upgrade_count
+
+    upgrade_count="$(
+        apt list --upgradable 2>/dev/null \
+            | tail -n +2 \
+            | wc -l \
+            | tr -d ' '
+    )"
+
+    if ((upgrade_count == 0)); then
+
+        success "$(t already_updated)"
+
+    else
+
+        info "$upgrade_count $(t packages_available)"
+
+        echo
+
+        apt list --upgradable 2>/dev/null \
+            | tail -n +2 \
+            | head -20 \
+            | gum format
+
+        if ((upgrade_count > 20)); then
+            echo
+            info "$(t showing_first_20)"
+        fi
+    fi
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Full upgrade
+# ─────────────────────────────────────────────────────────────
+
+full_upgrade() {
+
+    header
+    section "$(t upgrade_title)"
+
+    run_task \
+        "$(t refreshing)" \
+        apt-get update
+
+    local upgrade_count
+
+    upgrade_count="$(
+        apt list --upgradable 2>/dev/null \
+            | tail -n +2 \
+            | wc -l \
+            | tr -d ' '
+    )"
+
+    if ((upgrade_count == 0)); then
+
+        success "$(t no_upgrades)"
+        pause
+        return
+
+    fi
+
+    info "$upgrade_count $(t packages_ready)"
+
+    echo
+
+    if gum confirm \
+        --affirmative "$(t upgrade)" \
+        --negative "$(t cancel)" \
+        "$(t run_full_upgrade)"
+    then
+
+        echo
+
+        run_task \
+            "$(t upgrading_system)" \
+            apt-get full-upgrade -y
+
+        echo
+
+        success "$(t upgrade_completed)"
+
+    else
+
+        warning "$(t upgrade_cancelled)"
+
+    fi
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Cleanup
+# ─────────────────────────────────────────────────────────────
+
+cleanup_system() {
+
+    header
+    section "$(t cleanup_title)"
+
+    gum style \
+        --foreground "$GRAY" \
+        "$(t cleanup_description)"
+
+    echo
+
+    if ! gum confirm \
+        --affirmative "$(t clean)" \
+        --negative "$(t cancel)" \
+        "$(t continue)"
+    then
+
+        warning "$(t cleanup_cancelled)"
+        pause
+        return
+
+    fi
+
+    echo
+
+    run_task \
+        "$(t removing_unused)" \
+        apt-get autoremove -y
+
+    run_task \
+        "$(t cleaning_cache)" \
+        apt-get autoclean
+
+    success "$(t cleanup_completed)"
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Repair packages
+# ─────────────────────────────────────────────────────────────
+
+repair_packages() {
+
+    header
+    section "$(t repair_title)"
+
+    warning "$(t repair_warning)"
+
+    echo
+
+    if ! gum confirm \
+        --affirmative "$(t repair)" \
+        --negative "$(t cancel)" \
+        "$(t repair_question)"
+    then
+        return
+    fi
+
+    echo
+
+    run_task \
+        "$(t configuring_packages)" \
+        dpkg --configure -a
+
+    run_task \
+        "$(t repairing_dependencies)" \
+        apt-get --fix-broken install -y
+
+    run_task \
+        "$(t refreshing)" \
+        apt-get update
+
+    success "$(t package_repair_completed)"
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Complete update
+# ─────────────────────────────────────────────────────────────
+
+complete_update() {
+
+    header
+
+    gum style \
+        --border rounded \
+        --border-foreground "$PURPLE" \
+        --padding "1 2" \
+        --foreground "$WHITE" \
+        "$(t complete_maintenance)" \
+        "" \
+        "$(t this_will)" \
+        "$(t step_update_repo)" \
+        "$(t step_full_upgrade)" \
+        "$(t step_remove_unused)" \
+        "$(t step_clean_cache)"
+
+    echo
+
+    if ! gum confirm \
+        --affirmative "$(t start)" \
+        --negative "$(t cancel)" \
+        "$(t continue)"
+    then
+        return
+    fi
+
+    header
+    section "$(t step1)"
+
+    run_task \
+        "$(t updating_repositories)" \
+        apt-get update
+
+    section "$(t step2)"
+
+    run_task \
+        "$(t upgrading)" \
+        apt-get full-upgrade -y
+
+    section "$(t step3)"
+
+    run_task \
+        "$(t removing_packages)" \
+        apt-get autoremove -y
+
+    section "$(t step4)"
+
+    run_task \
+        "$(t cleaning_apt)" \
+        apt-get autoclean
+
+    echo
+
+    final_status
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Final status
+# ─────────────────────────────────────────────────────────────
+
+final_status() {
+
+    section "$(t final_status)"
+
+    local remaining
+
+    remaining="$(
+        apt list --upgradable 2>/dev/null \
+            | tail -n +2 \
+            | wc -l \
+            | tr -d ' '
+    )"
+
+    if ((remaining == 0)); then
+
+        success "$(t fully_updated)"
+
+    else
+
+        warning "$remaining $(t packages_remaining)"
+
+    fi
+
+    if dpkg --audit | grep -q .; then
+
+        warning "$(t dpkg_issue)"
+
+    else
+
+        success "$(t package_db_healthy)"
+
+    fi
+
+    if [[ -f /var/run/reboot-required ]]; then
+
+        echo
+
+        warning "$(t reboot_recommended)"
+
+        if gum confirm \
+            --affirmative "$(t reboot)" \
+            --negative "$(t later)" \
+            "$(t reboot_now)"
+        then
+
+            log "User requested reboot."
+            reboot
+
+        fi
+
+    else
+
+        success "$(t no_reboot)"
+
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# View logs
+# ─────────────────────────────────────────────────────────────
+
+view_log() {
+
+    header
+    section "$(t log_title)"
+
+    if [[ ! -s "$LOG_FILE" ]]; then
+
+        warning "$(t log_empty)"
+        pause
+        return
+
+    fi
+
+    tail -n 100 "$LOG_FILE" \
+        | gum pager \
+            --border rounded \
+            --border.foreground "$PURPLE"
+}
+
+# ─────────────────────────────────────────────────────────────
+# About
+# ─────────────────────────────────────────────────────────────
+
+about() {
+
+    header
+
+    gum style \
+        --border rounded \
+        --border-foreground "$PURPLE" \
+        --padding "1 3" \
+        --width 58 \
+        --align center \
+        "$APP_NAME" \
+        "" \
+        "Version $VERSION" \
+        "" \
+        "$(t about_description)" \
+        "" \
+        "$(t powered_by)"
+
+    pause
+}
+
+# ─────────────────────────────────────────────────────────────
+# Main menu
+# ─────────────────────────────────────────────────────────────
+
+main_menu() {
+
+    while true; do
+
+        header
+
+        info "$(t choose_action)"
+
+        echo
+
+        local choice
+
+        choice="$(
+            gum choose \
+                --cursor.foreground "$PURPLE" \
+                --selected.foreground "$CYAN" \
+                --height 12 \
+                "$(t complete_update)" \
+                "$(t update_repositories)" \
+                "$(t full_upgrade)" \
+                "$(t clean_system)" \
+                "$(t repair_packages)" \
+                "$(t system_information)" \
+                "$(t preflight_check)" \
+                "$(t view_log)" \
+                "$(t about)" \
+                "$(t exit)"
+        )" || exit 0
+
+        case "$choice" in
+
+            "$(t complete_update)")
+                complete_update
+                ;;
+
+            "$(t update_repositories)")
+                update_repositories
+                ;;
+
+            "$(t full_upgrade)")
+                full_upgrade
+                ;;
+
+            "$(t clean_system)")
+                cleanup_system
+                ;;
+
+            "$(t repair_packages)")
+                repair_packages
+                ;;
+
+            "$(t system_information)")
+                system_information
+                ;;
+
+            "$(t preflight_check)")
+                preflight_check
+                ;;
+
+            "$(t view_log)")
+                view_log
+                ;;
+
+            "$(t about)")
+                about
+                ;;
+
+            "$(t exit)")
+
+                clear
+
+                gum style \
+                    --foreground "$PURPLE" \
+                    --bold \
+                    "$(t goodbye)"
+
+                echo
+
+                log "$APP_NAME closed normally"
+
+                exit 0
+                ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────
+
+main() {
+
+    require_root
+    prepare_logs
+
+    install_base_dependencies
+    install_gum
+
+    choose_language
+
+    log "Dependencies ready"
+
+    main_menu
+}
+
+main "$@"
