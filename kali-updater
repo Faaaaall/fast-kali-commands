@@ -13,9 +13,9 @@
 #    - curl
 #    - gpg
 #
+#  Author: faaall
+#  GitHub: github.com/Faaaaall
 #  License: MIT
-#  Author: faaaaall
-#  Github: github.com/Faaaall
 # ============================================================
 
 set -Eeuo pipefail
@@ -185,6 +185,8 @@ t() {
             log_empty) echo "O log esta vazio." ;;
 
             about_description) echo "Gerenciador interativo de pacotes do Kali Linux" ;;
+            created_by) echo "Criado por faaall" ;;
+            github_profile) echo "GitHub: github.com/Faaaaall" ;;
             powered_by) echo "Feito com Bash + APT + Charm Gum" ;;
 
             press_enter) echo "Pressione Enter para continuar..." ;;
@@ -321,6 +323,8 @@ t() {
             log_empty) echo "Log is empty." ;;
 
             about_description) echo "Interactive Kali Linux package manager" ;;
+            created_by) echo "Created by faaall" ;;
+            github_profile) echo "GitHub: github.com/Faaaaall" ;;
             powered_by) echo "Built with Bash + APT + Charm Gum" ;;
 
             press_enter) echo "Press Enter to continue..." ;;
@@ -1119,6 +1123,9 @@ about() {
         "Version $VERSION" \
         "" \
         "$(t about_description)" \
+        "" \
+        "$(t created_by)" \
+        "$(t github_profile)" \
         "" \
         "$(t powered_by)"
 
