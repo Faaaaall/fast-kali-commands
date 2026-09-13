@@ -27,7 +27,8 @@ Before running it:
  
  - sudo ./kali-updater
 
-  <h1 align="center">the script requires sudo because it manages system packages, APT repositories, and package configuration</h1>
+  <p align="center">the script requires sudo because it manages system packages, APT repositories, and package configuration</p>
+
 
  
 
