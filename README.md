@@ -1,6 +1,3 @@
-# fast kali commands
-
-
 <h1 align="center">Kali Auto Updater</h1>
 <p align="center"> Quick Disclaimer </p>
 
